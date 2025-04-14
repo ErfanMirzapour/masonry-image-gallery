@@ -1,3 +1,8 @@
+/**
+ * A composable for implementing infinite scroll functionality
+ * @param loadMore - Function to be called when more content needs to be loaded
+ * @returns Object containing the bottomTrigger ref to be attached to the sentinel element
+ */
 export function useInfiniteScroll(loadMore: () => Promise<void>) {
    const observer = ref<IntersectionObserver>();
    const bottomTrigger = ref<HTMLElement>();

@@ -6,6 +6,10 @@ interface QueryCache {
    bookmark: string | null;
 }
 
+/**
+ * Pinia store for managing image search results and caching
+ * Implements caching mechanism for better UX during navigation
+ */
 export const useImagesStore = defineStore('images', {
    state: () => ({
       cache: {} as Record<string, QueryCache>,

@@ -1,115 +1,172 @@
 <template>
-   <div class='pt-3'>
-      <div class="form-wrapper mb-3">
-         <BForm @submit.prevent='onSubmit'>
-            <BFormInput v-model='query' type='search' placeholder='Search for images...' required
-               aria-label='Search Query' />
+   <div class="pt-3">
+      <!-- Search Form Section -->
+      <section class="form-wrapper mb-3" role='search'>
+         <BForm @submit.prevent="onSubmit">
+            <BFormInput v-model="query" type="search" placeholder="Search for images..." required
+               aria-label="Search Query" />
          </BForm>
-      </div>
+      </section>
 
-      <div v-if="!submitted" class='text-center'>Start searching...</div>
-      <div v-else-if="error" class="text-center" role="alert">{{ error }}</div>
-      <div v-else-if="images.length === 0 && !loading || !submitted">
-         There are not images related to your query!
-      </div>
-      <Loading v-else-if='loading' />
-
-      <BContainer v-else fluid class="masonry-container mb-3">
-         <div v-for="image in images" :key="image.id" class="masonry-item mb-3">
-            <NuxtImg loading='lazy' :src="image.images['736x'].url"
-               :srcset="`${image.images['236x'].url} 1x, ${image.images['474x'].url} 2x`"
-               :width="image.images['736x'].width" :height="image.images['736x'].height" :alt="image.description" />
+      <!-- Status Messages Section -->
+      <section aria-live="polite">
+         <div v-if="!submitted" class="text-center">Enter a search term to begin...</div>
+         <div v-else-if="error" class="text-center alert alert-danger" role="alert">{{ error }}</div>
+         <div v-else-if="images.length === 0 && !loading" class="text-center">
+            No images found for your search query.
          </div>
-      </BContainer>
-      <div ref="bottomTrigger" class="bottom-trigger"></div>
+         <Loading v-else-if="loading" />
+      </section>
 
-      <div v-if="loadingMore" class="text-center mb-3">
-         <Loading />
-      </div>
+      <!-- Image Gallery Section -->
+      <section aria-label="Image gallery">
+         <BContainer v-if='!loading' fluid class="masonry-container mb-3">
+            <div v-for="(image, index) in images" :key="`${query}-${index}-${image.images['736x'].url}`"
+               class="masonry-item mb-3">
+               <NuxtImg loading="lazy" :src="image.images['736x'].url"
+                  :srcset="`${image.images['236x'].url} 1x, ${image.images['474x'].url} 2x`"
+                  :width="image.images['736x'].width" :height="image.images['736x'].height"
+                  :alt="image.description || 'Pinterest image'" class="w-100 rounded h-auto" />
+            </div>
+         </BContainer>
+
+         <!-- Infinite Scroll Trigger -->
+         <div ref="bottomTrigger" class="bottom-trigger" aria-hidden="true"></div>
+         <div v-if='loadingMore' class='text-center mb-3'>
+            <Loading />
+         </div>
+      </section>
    </div>
 </template>
 
-<script lang="ts" setup>
+<script setup lang="ts">
+import { useImagesStore } from '@/stores/images'
+import type { ImageObject } from '@/types'
+
+// Store and router setup
+const store = useImagesStore()
 const route = useRoute()
 const router = useRouter()
-const store = useImagesStore()
 
-const query = ref(route.query.q as string || '')
-const images = ref<ImageObject[]>([])
-const error = ref<null | string>(null)
-const loading = ref(false)
-const loadingMore = ref(false)
-const submitted = ref(Boolean(route.query.q))
-const bookmark = ref<string | null>(null)
+// Component state
+interface State {
+   query: string
+   images: ImageObject[]
+   bookmark: string | null
+   loading: boolean
+   loadingMore: boolean
+   submitted: boolean
+   error: string | null
+}
 
+const state = reactive<State>({
+   query: route.query.q as string || '',
+   images: [],
+   bookmark: null,
+   loading: false,
+   loadingMore: false,
+   submitted: Boolean(route.query.q),
+   error: null
+})
+
+const { query, images, bookmark, loading, loadingMore, submitted, error } = toRefs(state)
+
+// Setup infinite scroll
 const { bottomTrigger } = useInfiniteScroll(loadMore)
 
+/**
+ * Watches for URL query changes and triggers search
+ */
 watch(() => route.query.q, async (newQuery) => {
    if (newQuery) {
-      submitted.value = true
-      query.value = newQuery as string
-      const cached = store.getQueryResult(query.value)
+      state.submitted = true
+      state.query = newQuery as string
+
+      // Check cache before making API request
+      const cached = store.getQueryResult(state.query)
       if (cached) {
-         images.value = cached.images
-         bookmark.value = cached.bookmark
+         state.images = cached.images
+         state.bookmark = cached.bookmark
       } else {
          await search()
       }
    } else {
-      submitted.value = false
-      images.value = []
-      bookmark.value = null
+      // Reset state when query is empty
+      resetState()
    }
 }, { immediate: true })
 
+function resetState() {
+   state.submitted = false
+   state.images = []
+   state.bookmark = null
+   state.error = null
+}
+
+/**
+ * Fetches images from the API
+ * @param bookmarkParam - Optional bookmark for pagination
+ */
 async function fetchImages(bookmarkParam: string | null = null) {
-   return await $fetch('/api/images', {
+   return await $fetch<{ pins: ImageObject[], bookmark: string | null }>('/api/images', {
       query: {
-         q: query.value,
+         q: state.query,
          limit: 10,
          ...(bookmarkParam ? { bookmark: bookmarkParam } : {})
       },
    })
 }
 
+/**
+ * Performs initial search and updates store cache
+ */
 async function search() {
    try {
-      loading.value = true
+      state.loading = true
+      state.error = null
       const { pins, bookmark: newBookmark } = await fetchImages()
-      images.value = pins
-      bookmark.value = newBookmark
-      store.setQueryResult(query.value, pins, newBookmark)
+      state.images = pins
+      state.bookmark = newBookmark
+      store.setQueryResult(state.query, pins, newBookmark)
    } catch (err) {
-      console.error(err)
-      error.value = 'Failed to fetch images. Please try again!'
+      console.error('Search error:', err)
+      state.error = 'Failed to fetch images. Please try again!'
    } finally {
-      loading.value = false
+      state.loading = false
    }
 }
 
+/**
+ * Loads more images when infinite scroll triggers
+ */
 async function loadMore() {
-   if (loading.value || loadingMore.value || !bookmark.value) return
+   if (state.loading || state.loadingMore || !state.bookmark) return
+
    try {
-      loadingMore.value = true
-      const { pins, bookmark: newBookmark } = await fetchImages(bookmark.value)
-      images.value = [...images.value, ...pins]
-      bookmark.value = newBookmark
-      store.setQueryResult(query.value, images.value, newBookmark)
+      state.loadingMore = true
+      state.error = null
+      const { pins, bookmark: newBookmark } = await fetchImages(state.bookmark)
+      state.images = [...state.images, ...pins]
+      state.bookmark = newBookmark
+      store.setQueryResult(state.query, state.images, newBookmark)
    } catch (err) {
-      console.error(err)
-      error.value = 'Failed to load more images'
+      console.error('Load more error:', err)
+      state.error = 'Failed to load more images'
    } finally {
-      loadingMore.value = false
+      state.loadingMore = false
    }
 }
 
+/**
+ * Handles form submission by updating the URL query
+ */
 async function onSubmit(e: Event) {
    e.preventDefault()
    try {
-      await router.push({ query: { q: query.value } })
-   } catch (err: any) {
-      console.error(err)
-      error.value = 'Failed to update search query'
+      await router.push({ query: { q: state.query } })
+   } catch (err) {
+      console.error('Navigation error:', err)
+      state.error = 'Failed to update search query'
    }
 }
 </script>
@@ -122,32 +179,36 @@ async function onSubmit(e: Event) {
 
 .masonry-container {
    column-count: 2;
-   column-gap: 1em;
+   column-gap: 1rem;
    width: 100%;
-   text-align: center;
+}
 
-   @media (min-width: 576px) {
+/* Responsive column count based on screen size */
+@media (min-width: 576px) {
+   .masonry-container {
       column-count: 3;
    }
+}
 
-   @media (min-width: 768px) {
+@media (min-width: 768px) {
+   .masonry-container {
       column-count: 4;
    }
 }
 
 .masonry-item {
+   display: inline-block;
+   width: 100%;
    break-inside: avoid;
-   border-radius: 10px;
-   overflow: hidden;
-
-   &>img {
-      width: 100%;
-      height: auto;
-   }
 }
 
 .bottom-trigger {
    width: 100%;
    height: 20px;
+}
+
+.alert {
+   max-width: 600px;
+   margin: 0 auto;
 }
 </style>
