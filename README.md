@@ -1,24 +1,18 @@
-# Nuxt Minimal Starter
+# Masonry Images Gallery
 
-Look at the [Nuxt documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
+This project is a Nuxt application that showcases an image gallery with a Pinterest-like masonry layout, built using Bootstrap for styling and Pinia for state management.
 
-## Setup
+[Demo](https://masonry-image-gallery.netlify.app/)
 
-Make sure to install dependencies:
+> It worth noting that because API response lacks necessary CORS headers, I added an API endpoint using Nuxt's server features to proxy it.
 
-```bash
-# npm
-npm install
+## Main Features
 
-# pnpm
-pnpm install
-
-# yarn
-yarn install
-
-# bun
-bun install
-```
+-  Pure CSS masonry layout (Multi-column layout)
+-  Caching results in store for (Back/Forward navigation)
+-  Responsive layout based on device size and pixel density
+-  Infinite scroll loading more behavior
+-  API endpoint Proxy
 
 ## Development Server
 
@@ -31,45 +25,13 @@ npm run dev
 # pnpm
 pnpm dev
 
-# yarn
-yarn dev
-
 # bun
 bun run dev
 ```
 
-## Production
+## Flaws
 
-Build the application for production:
+This app has a major UX flaw. Because the brand new CSS feature Masonry it's not implemented by the browsers yet and we're using a pure CSS (JS not involved) work around to have a semi-masonry layout, the order of the items changes as user scrolls bottom to see new images.
 
-```bash
-# npm
-npm run build
-
-# pnpm
-pnpm build
-
-# yarn
-yarn build
-
-# bun
-bun run build
-```
-
-Locally preview production build:
-
-```bash
-# npm
-npm run preview
-
-# pnpm
-pnpm preview
-
-# yarn
-yarn preview
-
-# bun
-bun run preview
-```
-
-Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
+The order of item placement in multi-column layout is not left to right, like grid layouts, but it's top to bottom.
+We could have create a new container for each set of new results but it won't look good because of the gap between two containers and it's not a great solution, either!
