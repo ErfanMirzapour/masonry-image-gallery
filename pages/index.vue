@@ -1,13 +1,11 @@
 <template>
    <div class='pt-3'>
-      <search class='mb-3'>
-         <div class="form-wrapper">
-            <BForm @submit='onSubmit'>
-               <BFormInput v-model='query' type='search' placeholder='Search for images...' required
-                  aria-label='Search Query' />
-            </BForm>
-         </div>
-      </search>
+      <div class="form-wrapper mb-3">
+         <BForm @submit.prevent='onSubmit'>
+            <BFormInput v-model='query' type='search' placeholder='Search for images...' required
+               aria-label='Search Query' />
+         </BForm>
+      </div>
 
       <div v-if="!submitted" class='text-center'>Start searching...</div>
       <div v-else-if="error" class="text-center" role="alert">{{ error }}</div>
@@ -33,17 +31,42 @@
 <script lang="ts" setup>
 import type { ImageObject } from '~/types';
 
-const query = ref()
+const route = useRoute()
+const router = useRouter()
+
+const query = ref(route.query.q as string || '')
 const images = ref<ImageObject[]>([])
 const error = ref<null | string>(null)
 const loading = ref(false)
-const submitted = ref(false)
+const submitted = ref(Boolean(route.query.q))
 const loadingMore = ref(false)
 const bookmark = ref<string | null>(null)
 
 const { bottomTrigger } = useInfiniteScroll(loadMore)
 
-// New fetchImages() helper
+// Watch for route query changes (initial load)
+watch(() => route.query.q, async (newQuery) => {
+   if (newQuery) {
+      submitted.value = true
+      query.value = newQuery as string
+      await search()
+   } else {
+      submitted.value = false
+      images.value = []
+      bookmark.value = null
+   }
+}, { immediate: true })
+
+async function onSubmit(e: Event) {
+   e.preventDefault()
+   try {
+      await router.push({ query: { q: query.value } })
+   } catch (err: any) {
+      console.error(err);
+      error.value = 'Failed to update search query';
+   }
+}
+
 async function fetchImages(bookmarkParam: string | null = null) {
    return await $fetch('/api/images', {
       query: {
@@ -54,11 +77,9 @@ async function fetchImages(bookmarkParam: string | null = null) {
    })
 }
 
-async function onSubmit(e: Event) {
-   e.preventDefault()
+async function search() {
    try {
       loading.value = true
-      submitted.value = true
       images.value = []
       bookmark.value = null
       const { pins, bookmark: newBookmark } = await fetchImages()
