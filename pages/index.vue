@@ -64,10 +64,18 @@ async function onSubmit(e: Event) {
 }
 
 .masonry-container {
-   column-count: 3;
+   column-count: 1;
    column-gap: 1em;
    width: 100%;
    text-align: center;
+
+   @media (min-width: 576px) {
+      column-count: 2;
+   }
+
+   @media (min-width: 768px) {
+      column-count: 3;
+   }
 }
 
 .masonry-item {
