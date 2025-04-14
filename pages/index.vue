@@ -22,6 +22,11 @@
                :width="image.images['736x'].width" :height="image.images['736x'].height" :alt="image.description" />
          </div>
       </BContainer>
+      <div ref="bottomTrigger" class="bottom-trigger"></div>
+
+      <div v-if="loadingMore" class="text-center mb-3">
+         <Loading />
+      </div>
    </div>
 </template>
 
@@ -33,19 +38,32 @@ const images = ref<ImageObject[]>([])
 const error = ref<null | string>(null)
 const loading = ref(false)
 const submitted = ref(false)
+const loadingMore = ref(false)
+const bookmark = ref<string | null>(null)
+
+const { bottomTrigger } = useInfiniteScroll(loadMore)
+
+// New fetchImages() helper
+async function fetchImages(bookmarkParam: string | null = null) {
+   return await $fetch('/api/images', {
+      query: {
+         q: query.value,
+         limit: 10,
+         ...(bookmarkParam ? { bookmark: bookmarkParam } : {})
+      },
+   })
+}
 
 async function onSubmit(e: Event) {
    e.preventDefault()
    try {
       loading.value = true
       submitted.value = true
-      const { pins } = await $fetch('/api/images', {
-         query: {
-            q: query.value,
-            limit: 10,
-         },
-      })
+      images.value = []
+      bookmark.value = null
+      const { pins, bookmark: newBookmark } = await fetchImages()
       images.value = pins
+      bookmark.value = newBookmark
    } catch (err: any) {
       console.error(err);
       error.value = 'Failed to fetch images. Please try again!';
@@ -53,14 +71,27 @@ async function onSubmit(e: Event) {
       loading.value = false
    }
 }
+
+async function loadMore() {
+   if (loadingMore.value || !bookmark.value) return
+   try {
+      loadingMore.value = true
+      const { pins, bookmark: newBookmark } = await fetchImages(bookmark.value)
+      images.value = [...images.value, ...pins]
+      bookmark.value = newBookmark
+   } catch (err) {
+      console.error(err)
+      error.value = 'Failed to load more images'
+   } finally {
+      loadingMore.value = false
+   }
+}
 </script>
 
 <style scoped>
 .form-wrapper {
    width: 20rem;
-   /* Adjust the width as needed */
    margin: 0 auto;
-   /* Centers the form horizontally */
 }
 
 .masonry-container {
@@ -87,5 +118,10 @@ async function onSubmit(e: Event) {
       width: 100%;
       height: auto;
    }
+}
+
+.bottom-trigger {
+   width: 100%;
+   height: 20px;
 }
 </style>
